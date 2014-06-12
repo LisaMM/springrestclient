@@ -1,10 +1,14 @@
 package be.vdab.restclient;
 
+import java.io.IOException;
 import java.net.URI;
-import java.util.Set;
+import java.nio.charset.Charset;
+import java.util.*;
 
+import org.apache.commons.codec.binary.Base64;
 import org.springframework.beans.factory.annotation.*;
 import org.springframework.http.*;
+import org.springframework.http.client.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.*;
 import org.springframework.web.util.UriTemplate;
@@ -19,11 +23,15 @@ class FiliaalClientImpl implements FiliaalClient {
 
 	@Autowired
 	public FiliaalClientImpl(
-			@Value("${filiaalServiceURI}") URI filiaalServiceURI,
-			RestTemplate restTemplate) {
+		@Value("${filiaalServiceURI}") URI filiaalServiceURI,
+		RestTemplate restTemplate, @Value("${filiaalServiceUsername}") String username,
+		@Value("${filiaalServicePassword}") String password) {
 		this.filiaalServiceURI = filiaalServiceURI;
 		this.restTemplate = restTemplate;
 		filiaalURITemplate = new UriTemplate(filiaalServiceURI + "/{id}");
+		List<ClientHttpRequestInterceptor> interceptors = new ArrayList<>();
+		interceptors.add(new SecurityInterceptor(username, password));
+		this.restTemplate.setInterceptors(interceptors);
 	}
 
 	@Override
@@ -115,5 +123,22 @@ class FiliaalClientImpl implements FiliaalClient {
 			}
 			throw ex;
 		}
+	}
+	
+	private static class SecurityInterceptor implements ClientHttpRequestInterceptor {
+		private final String authenticatie;
+		
+		public SecurityInterceptor(String username, String password) {
+			authenticatie = "Basic " + Base64.encodeBase64String((username +
+					":" + password).getBytes(Charset.forName("UTF-8")));
+		}
+
+		@Override
+		public ClientHttpResponse intercept(HttpRequest request, byte[] body,
+				ClientHttpRequestExecution execution) throws IOException {
+			request.getHeaders().add("Authorization", authenticatie);
+			return execution.execute(request, body);
+		}
+		
 	}
 }
